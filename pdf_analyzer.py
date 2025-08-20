@@ -40,22 +40,29 @@ class PDFAnalyzer:
             pdf_document = fitz.open(pdf_path)
             print(f"PDF打开成功，共 {len(pdf_document)} 页", flush=True)
             
-            for page_num in range(len(pdf_document)):
-                print(f"正在处理第 {page_num + 1} 页...", flush=True)
+            total_pages = len(pdf_document)
+            for page_num in range(total_pages):
+                print(f"正在处理第 {page_num + 1}/{total_pages} 页...", flush=True)
+                sys.stdout.flush()
                 
-                # 获取页面
-                page = pdf_document.load_page(page_num)
-                
-                # 将页面转换为图像
-                mat = fitz.Matrix(2.0, 2.0)  # 2倍缩放以提高分辨率
-                pix = page.get_pixmap(matrix=mat)
-                img_data = pix.tobytes("ppm")
-                
-                # 转换为PIL Image
-                image = Image.open(io.BytesIO(img_data))
-                
-                # 检测二维码
-                qr_codes = self.detect_qr_codes(image)
+                try:
+                    # 获取页面
+                    page = pdf_document.load_page(page_num)
+                    
+                    # 将页面转换为图像
+                    mat = fitz.Matrix(1.5, 1.5)  # 降低缩放倍数以提高处理速度
+                    pix = page.get_pixmap(matrix=mat)
+                    img_data = pix.tobytes("ppm")
+                    
+                    # 转换为PIL Image
+                    image = Image.open(io.BytesIO(img_data))
+                    
+                    # 检测二维码
+                    qr_codes = self.detect_qr_codes(image)
+                    
+                except Exception as e:
+                    print(f"处理第 {page_num + 1} 页时出错: {str(e)}", flush=True)
+                    continue
                 
                 for qr_data in qr_codes:
                     results['total_qr_codes'] += 1
@@ -100,58 +107,43 @@ class PDFAnalyzer:
     
     def detect_qr_codes(self, image):
         """
-        检测图像中的二维码
+        检测图像中的二维码（优化版本）
         """
         import sys
         try:
-            print(f"开始检测二维码，图像类型: {type(image)}", flush=True)
-            sys.stdout.flush()
+            print(f"开始检测二维码，图像尺寸: {image.size}", flush=True)
             
             # 转换PIL Image为OpenCV格式
-            if isinstance(image, Image.Image):
-                print(f"PIL图像尺寸: {image.size}", flush=True)
-                opencv_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
-            else:
-                opencv_image = image
-            
-            print(f"OpenCV图像形状: {opencv_image.shape}", flush=True)
+            opencv_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
             
             # 初始化QR码检测器
             qr_detector = cv2.QRCodeDetector()
             
-            # 检测和解码二维码
-            data, bbox, rectified_image = qr_detector.detectAndDecode(opencv_image)
-            
             results = []
-            if data:
-                print(f"检测到二维码: {data}", flush=True)
-                results.append(data)
-            else:
-                print("单个二维码检测未找到结果", flush=True)
             
-            # 尝试检测多个二维码
+            # 优先尝试多二维码检测（更高效）
             try:
                 retval, decoded_info, points, straight_qrcode = qr_detector.detectAndDecodeMulti(opencv_image)
-                print(f"多二维码检测结果: retval={retval}", flush=True)
-                if retval:
+                if retval and decoded_info:
                     print(f"检测到 {len(decoded_info)} 个二维码", flush=True)
                     for i, info in enumerate(decoded_info):
-                        print(f"二维码 {i+1}: {info}", flush=True)
-                        if info and info not in results:
-                            results.append(info)
+                        if info and info.strip():  # 确保不是空字符串
+                            results.append(info.strip())
                 else:
-                    print("多二维码检测未找到结果", flush=True)
-            except Exception as multi_e:
-                print(f"多二维码检测异常: {multi_e}", flush=True)
+                    # 如果多二维码检测失败，尝试单个二维码检测
+                    data, bbox, rectified_image = qr_detector.detectAndDecode(opencv_image)
+                    if data and data.strip():
+                        print(f"检测到单个二维码: {data}", flush=True)
+                        results.append(data.strip())
+                    else:
+                        print("未检测到二维码", flush=True)
+            except Exception as e:
+                print(f"二维码检测异常: {str(e)}", flush=True)
             
             print(f"最终检测结果: {len(results)} 个二维码", flush=True)
-            sys.stdout.flush()
             return results
         except Exception as e:
             print(f"二维码检测错误: {e}", flush=True)
-            import traceback
-            traceback.print_exc()
-            sys.stdout.flush()
             return []
     
     def is_wechat_article_url(self, url):

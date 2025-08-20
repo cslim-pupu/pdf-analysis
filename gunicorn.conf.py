@@ -8,7 +8,7 @@ workers = 1
 worker_class = "sync"
 
 # Timeout settings
-timeout = 120  # 增加到120秒以处理大文件和多个二维码
+timeout = 300  # 增加到300秒（5分钟）以处理大文件和多个二维码
 keepalive = 2
 
 # Logging
