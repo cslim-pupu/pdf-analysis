@@ -1,0 +1,12 @@
+Flask
+Flask-CORS
+PyPDF2
+opencv-python
+Pillow
+requests
+beautifulsoup4
+lxml
+numpy
+Werkzeug
+gunicorn
+PyMuPDF
