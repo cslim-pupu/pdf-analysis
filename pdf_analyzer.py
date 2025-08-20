@@ -59,14 +59,31 @@ class PDFAnalyzer:
                 
                 for qr_data in qr_codes:
                     results['total_qr_codes'] += 1
+                    print(f"处理二维码: {qr_data}", flush=True)
                     
                     if self.is_wechat_article_url(qr_data):
-                        # 分析微信文章
-                        article_info = self.analyze_wechat_article(qr_data)
-                        if article_info:
-                            article_info['page_number'] = page_num + 1  # 转换为1基索引
-                            article_info['qr_url'] = qr_data
-                            results['wechat_articles'].append(article_info)
+                        try:
+                            # 分析微信文章
+                            article_info = self.analyze_wechat_article(qr_data)
+                            if article_info and 'error' not in article_info:
+                                article_info['page_number'] = page_num + 1  # 转换为1基索引
+                                article_info['qr_url'] = qr_data
+                                results['wechat_articles'].append(article_info)
+                                print(f"成功分析微信文章: {article_info.get('title', '未知标题')}", flush=True)
+                            else:
+                                print(f"微信文章分析失败: {qr_data}", flush=True)
+                                results['other_qr_codes'].append({
+                                    'url': qr_data,
+                                    'page_number': page_num + 1,
+                                    'error': article_info.get('error', '分析失败') if article_info else '无响应'
+                                })
+                        except Exception as e:
+                            print(f"微信文章分析异常: {qr_data}, 错误: {str(e)}", flush=True)
+                            results['other_qr_codes'].append({
+                                'url': qr_data,
+                                'page_number': page_num + 1,
+                                'error': f'分析异常: {str(e)}'
+                            })
                     else:
                         results['other_qr_codes'].append({
                             'url': qr_data,
@@ -153,10 +170,10 @@ class PDFAnalyzer:
     def analyze_wechat_article(self, url):
         """分析微信公众号文章"""
         try:
-            # 添加延时避免被限制
-            time.sleep(1)
+            # 减少延时以避免超时，仅在必要时添加短暂延时
+            time.sleep(0.2)
             
-            response = self.session.get(url, timeout=10)
+            response = self.session.get(url, timeout=5)
             response.raise_for_status()
             
             soup = BeautifulSoup(response.content, 'html.parser')
